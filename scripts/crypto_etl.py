@@ -31,9 +31,12 @@ def get_missing_coins() -> List[Dict]:
     ss_url = "https://simpleswap.io/api/v3/currencies?fixed=false&includeDisabled=false"
     ss_data = fetch_data(ss_url)
     
-    # Извлечение символов
+    # Извлечение символов из CoinMarketCap
     cmc_coins = {coin['symbol']: coin for coin in cmc_data['data']['cryptoCurrencyList']}
-    ss_symbols = {currency['symbol'] for currency in ss_data['data']}
+    
+    # Извлечение символов из SimpleSwap
+    # Теперь ss_data — это список, а не словарь
+    ss_symbols = {currency['symbol'] for currency in ss_data}
     
     # Фильтрация отсутствующих монет
     missing_coins = [
@@ -51,8 +54,15 @@ def get_missing_coins() -> List[Dict]:
     return missing_coins
 
 def save_to_database(coins: List[Dict]) -> None:
-    # Подключение к SQLite
-    engine = db.create_engine('sqlite:///../data/crypto_data.db')
+    import os
+
+    # Создаем папку data, если её нет
+    #os.makedirs('../data', exist_ok=True)
+
+    # Подключение к SQLite (абсолютный путь)
+    db_path = os.path.abspath('../crypto_comparison/data/crypto_data.db')
+    engine = db.create_engine(f'sqlite:///{db_path}')
+    
     Base.metadata.create_all(engine)
     
     # Сохранение данных
