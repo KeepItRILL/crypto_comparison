@@ -1,4 +1,5 @@
 import requests
+import os
 import sqlalchemy as db
 from sqlalchemy.orm import declarative_base, Session
 import pandas as pd
@@ -32,11 +33,12 @@ def get_missing_coins() -> List[Dict]:
     ss_data = fetch_data(ss_url)
     
     # Извлечение символов из CoinMarketCap
-    cmc_coins = {coin['symbol']: coin for coin in cmc_data['data']['cryptoCurrencyList']}
+    cmc_coins = {coin['symbol'].upper(): coin for coin in cmc_data['data']['cryptoCurrencyList']}
     
     # Извлечение символов из SimpleSwap
     # Теперь ss_data — это список, а не словарь
-    ss_symbols = {currency['symbol'] for currency in ss_data}
+    ss_symbols = {currency['symbol'].upper() for currency in ss_data}
+
     
     # Фильтрация отсутствующих монет
     missing_coins = [
@@ -54,13 +56,12 @@ def get_missing_coins() -> List[Dict]:
     return missing_coins
 
 def save_to_database(coins: List[Dict]) -> None:
-    import os
-
     # Создаем папку data, если её нет
-    #os.makedirs('../data', exist_ok=True)
+    data_dir = os.path.abspath('../crypto_comparison/data')
+    os.makedirs(data_dir, exist_ok=True)
 
     # Подключение к SQLite (абсолютный путь)
-    db_path = os.path.abspath('../crypto_comparison/data/crypto_data.db')
+    db_path = os.path.join(data_dir, 'crypto_data.db')
     engine = db.create_engine(f'sqlite:///{db_path}')
     
     Base.metadata.create_all(engine)
@@ -68,18 +69,31 @@ def save_to_database(coins: List[Dict]) -> None:
     # Сохранение данных
     with Session(engine) as session:
         for coin in coins:
-            crypto = Cryptocurrency(**coin)
-            session.add(crypto)
+            # Проверяем, существует ли уже запись с таким символом
+            existing_coin = session.query(Cryptocurrency).filter_by(symbol=coin['symbol']).first()
+            if existing_coin:
+                # Если запись существует, обновляем её
+                existing_coin.name = coin['name']
+                existing_coin.cmc_rank = coin['cmc_rank']
+                existing_coin.volume_24h = coin['volume_24h']
+                existing_coin.volume_7d = coin['volume_7d']
+                existing_coin.volume_30d = coin['volume_30d']
+            else:
+                # Если записи нет, создаем новую
+                crypto = Cryptocurrency(**coin)
+                session.add(crypto)
         session.commit()
 
 def export_to_csv() -> None:
     # Чтение данных из базы и сортировка
-    engine = db.create_engine('sqlite:///../data/crypto_data.db')
+    db_path = os.path.abspath('../crypto_comparison/data/crypto_data.db')
+    engine = db.create_engine(f'sqlite:///{db_path}')
     query = "SELECT * FROM cryptocurrencies ORDER BY volume_24h DESC"
     df = pd.read_sql(query, engine)
     
     # Экспорт в CSV
-    df.to_csv('../data/missing_coins.csv', index=False)
+    csv_path = os.path.abspath('../crypto_comparison/data/missing_coins.csv')
+    df.to_csv(csv_path, index=False)
 
 if __name__ == "__main__":
     missing_coins = get_missing_coins()
