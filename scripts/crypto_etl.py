@@ -36,7 +36,6 @@ def get_missing_coins() -> List[Dict]:
     cmc_coins = {coin['symbol'].upper(): coin for coin in cmc_data['data']['cryptoCurrencyList']}
     
     # Извлечение символов из SimpleSwap
-    # Теперь ss_data — это список, а не словарь
     ss_symbols = {currency['symbol'].upper() for currency in ss_data}
 
     
